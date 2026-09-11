@@ -1,0 +1,10 @@
+# Never publish local Wi-Fi credentials or logs.
+settings.txt
+*.log
+*.psk
+hostapd.conf
+.launcher.lock
+.desktop-path
+.steam-deck-hotspot-install
+__pycache__/
+dist/
