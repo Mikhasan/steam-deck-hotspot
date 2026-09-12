@@ -23,7 +23,7 @@ iw() {
     else return 1; fi
 }
 '''
-        script = 'set -euo pipefail\nAP=deckhot0\n' + fixture + SELECTION + '\nprintf "RESULT:%s:%s:%s\\n" "$BAND" "$CHANNEL" "$STA"\n'
+        script = 'set -euo pipefail\nAP=deckhot0\nDIR=/nonexistent-hotspot-test\n' + fixture + SELECTION + '\nprintf "RESULT:%s:%s:%s\\n" "$BAND" "$CHANNEL" "$STA"\n'
         import os
         return subprocess.run(['bash', '-c', script], text=True, capture_output=True, env={**os.environ, 'REQUESTED_BAND': band, 'CONNECTED': 'yes' if connected else 'no', 'BLOCKED': 'no IR' if blocked else ''})
 

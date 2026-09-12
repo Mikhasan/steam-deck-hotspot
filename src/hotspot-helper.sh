@@ -41,6 +41,7 @@ if [[ $ACTION == off ]] || iw dev "$AP" info >/dev/null 2>&1 || systemctl is-act
     echo 'Hotspot is off.'
     exit 0
 fi
+COUNTRY=''
 STA=''
 RADIO=''
 while read -r device; do
@@ -59,14 +60,25 @@ else
     [[ $REQUESTED_BAND != auto ]] || { echo 'Choose a band: toggle.sh --band 2.4 or --band 5'; exit 2; }
     PHY=$(iw dev "$RADIO" info | awk '$1 == "wiphy" {print "phy" $2}')
     if [[ $REQUESTED_BAND == 2.4 ]]; then BAND=g; else BAND=a; fi
-    # Use a locally permitted, non-DFS channel; never change the regulatory domain.
+    # Apply only a country explicitly configured by the user for their location.
+    if [[ -f $DIR/country.txt ]]; then
+        COUNTRY=$(tr -d '\r\n' <"$DIR/country.txt")
+        [[ $COUNTRY =~ ^[A-Z]{2}$ ]] || { echo 'country.txt must contain your two-letter country code.'; exit 2; }
+        iw reg set "$COUNTRY"
+        # Regulatory updates are asynchronous; wait for the configured domain.
+        for attempt in {1..20}; do
+            iw reg get | grep -q "country $COUNTRY:" && break
+            sleep 0.1
+        done
+    fi
+    # Select only a permitted non-DFS channel; never ignore no-IR restrictions.
     CHANNEL=$(iw phy "$PHY" info | awk -v band="$BAND" '
         /MHz \[/ && !/disabled|no IR|radar/ {
             freq=$2; channel=$4; gsub(/\[|\]/,"",channel)
             if ((band == "g" && freq >= 2412 && freq <= 2462) ||
                 (band == "a" && freq >= 5180 && freq <= 5240)) { if (!found) print channel; found=1 }
         }')
-    [[ $CHANNEL =~ ^[0-9]+$ ]] || { echo "No permitted non-DFS channel for $REQUESTED_BAND GHz. Try the other band."; exit 1; }
+    [[ $CHANNEL =~ ^[0-9]+$ ]] || { echo "No permitted non-DFS channel for $REQUESTED_BAND GHz. Set your actual country in country.txt, or try 2.4 GHz."; exit 1; }
     MODE='Standalone hotspot (internet requires another upstream connection)'
 fi
 SSID=$(sed -n '1p' "$DIR/settings.txt")
@@ -139,6 +151,9 @@ wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
 wpa_psk=$PSK
 CONFIG
+if [[ -n $COUNTRY ]]; then
+    printf 'country_code=%s\nieee80211d=1\n' "$COUNTRY" >>"$STATE/hostapd.conf"
+fi
 systemctl reset-failed "$UNIT.service" 2>/dev/null || true
 systemd-run --unit="$UNIT" --collect --property=Type=exec /usr/bin/hostapd "$STATE/hostapd.conf"
 ready=0

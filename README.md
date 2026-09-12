@@ -43,6 +43,16 @@ Choose **5 GHz** or **2.4 GHz** in the dialog. The hotspot uses a permitted
 non-DFS channel (normally 36 on 5 GHz or 1 on 2.4 GHz). If that band has no
 eligible channel, startup stops with an error; regulatory limits are respected.
 
+On the first standalone 5 GHz start, enter the two-letter code of the country
+where you are physically using the Deck. It is saved in `country.txt` beside
+`settings.txt`. Update it when travelling. SteamOS can reset the domain to `00`
+when disconnecting from a router; in that domain all 5 GHz channels may be marked
+`no IR`, preventing AP startup. The helper applies your configured country using
+`iw reg set` and supplies it to hostapd, then still checks permitted channels.
+This changes the radio's regulatory domain; it is not restored on hotspot shutdown.
+For terminal use, create `country.txt` with your actual country code first if
+running without an interactive terminal. No country is hardcoded in the repository.
+
 For terminal use:
 
 ```bash
@@ -137,7 +147,7 @@ bash -n install.sh
 for script in src/*.sh; do bash -n "$script"; done
 ```
 
-Automated tests exercise installation, updates, password generation, path handling, and uninstallation with privileged actions stubbed out. Channel-selection tests also cover both standalone bands, restricted channels and upstream precedence. They do not validate radio operation; standalone operation has not yet been tested on hardware. The original hotspot implementation was tested for startup, shutdown, restart, DHCP and client internet access on the LCD configuration above; the packaged installer is checked separately.
+Automated tests exercise installation, updates, password generation, path handling, and uninstallation with privileged actions stubbed out. Channel-selection tests also cover both standalone bands, restricted channels and upstream precedence. They do not validate radio operation; standalone 5 GHz startup and shutdown have also been tested on the LCD with the confirmed RU domain, channel 36; client streaming in that standalone test was not checked. The original hotspot implementation was tested for startup, shutdown, restart, DHCP and client internet access on the LCD configuration above; the packaged installer is checked separately.
 
 Contributions and hardware reports are welcome. Include SteamOS version, Deck model, driver, band/channel and a redacted log. Never attach your `settings.txt` or an unredacted hostapd configuration.
 

@@ -8,3 +8,4 @@ hostapd.conf
 .steam-deck-hotspot-install
 __pycache__/
 dist/
+country.txt

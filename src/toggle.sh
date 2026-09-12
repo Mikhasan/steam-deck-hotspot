@@ -35,6 +35,19 @@ if ! iw dev deckhot0 info >/dev/null 2>&1 && ! systemctl is-active --quiet deck-
         fi
         case $band in 2.4|5) ;; *) echo 'Invalid band.'; exit 2 ;; esac
     fi
+    if (( ! connected )) && [[ $band == 5 && ! -f $DIR/country.txt ]]; then
+        if (( ! terminal )) && command -v kdialog >/dev/null; then
+            country=$(kdialog --title 'Wi-Fi country / Страна Wi-Fi' --inputbox 'Actual country code / Код страны, где вы находитесь (RU, DE, US…):') || exit 0
+        elif [[ -t 0 ]]; then
+            read -r -p 'Your actual two-letter country code (RU, DE, US...): ' country
+        else
+            echo 'Save your actual two-letter country code in country.txt first.' >&2
+            exit 2
+        fi
+        country=$(printf '%s' "$country" | tr '[:lower:]' '[:upper:]')
+        [[ $country =~ ^[A-Z]{2}$ ]] || { echo 'Invalid country code.'; exit 2; }
+        printf '%s\n' "$country" >"$DIR/country.txt"
+    fi
 fi
 log="$DIR/last-run.log"
 if pkexec /bin/bash "$DIR/hotspot-helper.sh" toggle "$band" >"$log" 2>&1; then
