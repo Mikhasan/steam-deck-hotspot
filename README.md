@@ -1,6 +1,6 @@
 # Steam Deck Hotspot
 
-Share your Steam Deck's Wi-Fi connection over a password-protected Wi-Fi hotspot. Start and stop it with a desktop shortcut.
+Share your Steam Deck's Wi-Fi connection, or create a standalone 2.4/5 GHz hotspot for local Moonlight streaming. Start and stop it with a desktop shortcut.
 
 [Инструкция на русском](docs/README.ru.md)
 
@@ -24,7 +24,7 @@ bash install.sh
 
 The installer creates a **Wi-Fi Hotspot** desktop shortcut and installs user files in `~/.local/share/steam-deck-hotspot` (or under `XDG_DATA_HOME` when set). It generates a unique random Wi-Fi password. Installing again preserves your settings.
 
-Connect the Deck to Wi-Fi, launch the shortcut, and enter your **Linux user password**, not your Steam password. If you have never set one, run `passwd` in Konsole first. KDE may ask you to trust the desktop shortcut.
+Keep Wi-Fi enabled and launch the shortcut, and enter your **Linux user password**, not your Steam password. If you have never set one, run `passwd` in Konsole first. KDE may ask you to trust the desktop shortcut.
 
 The first launch installs `hostapd` and `dnsmasq` from the configured SteamOS repositories if missing. It temporarily disables SteamOS read-only protection and restores its previous state afterward. An internet connection and working package repositories/keyring are required. SteamOS updates may remove these packages; the next launch installs them again. Do not run the installer with sudo.
 
@@ -35,6 +35,29 @@ The first launch installs `hostapd` and `dnsmasq` from the configured SteamOS re
 - Edit `~/.local/share/steam-deck-hotspot/settings.txt`: first line is the SSID, second line is the password. Use an 8–63 character ASCII password. Changes take effect on the next start.
 - The hotspot does not start automatically after reboot.
 - After changing the upstream Wi-Fi network or channel, turn the hotspot off and on again.
+
+## Standalone hotspot (no router)
+
+Leave Wi-Fi enabled but disconnect from the router, then launch the shortcut.
+Choose **5 GHz** or **2.4 GHz** in the dialog. The hotspot uses a permitted
+non-DFS channel (normally 36 on 5 GHz or 1 on 2.4 GHz). If that band has no
+eligible channel, startup stops with an error; regulatory limits are respected.
+
+For terminal use:
+
+```bash
+bash ~/.local/share/steam-deck-hotspot/toggle.sh --terminal --band 5
+# Or: --band 2.4
+```
+
+When already connected to Wi-Fi, the router's channel and band take precedence.
+To switch an active hotspot's band, stop it and start it again.
+During standalone operation, adapter autoconnect is disabled and restored on
+shutdown. Keep Wi-Fi enabled; turning off the radio also disables the hotspot.
+
+Moonlight/Sunshine works locally without internet. Other clients only get internet
+if the Deck has an upstream connection, for example Ethernet or USB tethering.
+Missing packages still require an internet connection to install the first time.
 
 ## Limits
 
@@ -59,6 +82,26 @@ Router Wi-Fi → wlan0 (existing connection, managed by IWD)
 `hostapd` manages the additional AP interface. A runtime NetworkManager rule excludes only that interface from management. NetworkManager manages the bridge and runs `dnsmasq` for client addresses and DNS. No global Wi-Fi backend switch or NetworkManager restart is needed.
 
 The shortcut uses `pkexec` for privileged operations. No passwordless sudo rule or boot service is installed. Runtime files live under `/run/deck-hotspot` and `/run/NetworkManager/conf.d/90-deck-hotspot.conf`; a transient `deck-hotspot-ap.service` runs hostapd. The `Deck-Hotspot-Bridge` profile persists with autoconnect disabled. The names `deckhot0` and `deckbr0` are reserved for this tool.
+
+## Moonlight through the hotspot
+
+Add the hotspot address in Moonlight (normally `10.42.0.1`; check with
+`ip -4 addr show deckbr0`). Enter the pairing PIN in Sunshine on the Deck.
+
+With firewalld, `nm-shared` normally blocks services on the Deck even when shared
+internet works. To allow Sunshine's default streaming ports for hotspot clients:
+
+```bash
+for port in 47984/tcp 47989/tcp 48010/tcp 47998-48000/udp; do
+    sudo firewall-cmd --zone=nm-shared --add-port="$port"
+    sudo firewall-cmd --permanent --zone=nm-shared --add-port="$port"
+done
+```
+
+These optional rules persist and apply to interfaces in `nm-shared`. They do not
+open the Sunshine administration page. Adjust the list for custom Sunshine ports.
+The installer does not add them automatically, and uninstall leaves them in place.
+To undo them, repeat the commands with `--remove-port` instead of `--add-port`.
 
 ## Troubleshooting
 
@@ -89,12 +132,12 @@ This stops the hotspot, removes its NetworkManager profile, runtime configuratio
 ## Development and validation
 
 ```bash
-python3 tests/test_install.py
+python3 -m unittest discover -s tests -v
 bash -n install.sh
 for script in src/*.sh; do bash -n "$script"; done
 ```
 
-Automated tests exercise installation, updates, password generation, path handling, and uninstallation with privileged actions stubbed out. They do not validate radio operation. The original hotspot implementation was tested for startup, shutdown, restart, DHCP and client internet access on the LCD configuration above; the packaged installer is checked separately.
+Automated tests exercise installation, updates, password generation, path handling, and uninstallation with privileged actions stubbed out. Channel-selection tests also cover both standalone bands, restricted channels and upstream precedence. They do not validate radio operation; standalone operation has not yet been tested on hardware. The original hotspot implementation was tested for startup, shutdown, restart, DHCP and client internet access on the LCD configuration above; the packaged installer is checked separately.
 
 Contributions and hardware reports are welcome. Include SteamOS version, Deck model, driver, band/channel and a redacted log. Never attach your `settings.txt` or an unredacted hostapd configuration.
 

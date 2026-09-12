@@ -10,4 +10,4 @@ jobs:
       - name: Shell syntax
         run: bash -n install.sh && for script in src/*.sh; do bash -n "$script"; done
       - name: Installer tests
-        run: python3 tests/test_install.py
+        run: python3 -m unittest discover -s tests -v
