@@ -11,6 +11,6 @@ IFS= read -r desktop_file <"$DIR/.desktop-path"
 if [[ -f $desktop_file ]] && grep -Fq "Exec=/bin/bash \"$DIR/toggle.sh\"" "$desktop_file"; then
     rm -- "$desktop_file"
 fi
-rm -f -- "$DIR/toggle.sh" "$DIR/hotspot-helper.sh" "$DIR/uninstall.sh"     "$DIR/country.txt" "$DIR/settings.txt" "$DIR/last-run.log" "$DIR/.desktop-path"     "$DIR/.steam-deck-hotspot-install" "$DIR/.launcher.lock"
+rm -f -- "$DIR/toggle.sh" "$DIR/hotspot-helper.sh" "$DIR/dependencies.sh" "$DIR/uninstall.sh"     "$DIR/sunshine-access.txt" "$DIR/country.txt" "$DIR/settings.txt" "$DIR/last-run.log" "$DIR/.desktop-path"     "$DIR/.steam-deck-hotspot-install" "$DIR/.launcher.lock"
 rmdir -- "$DIR" || echo 'Additional files remain in the installation directory.'
 echo 'Uninstalled. hostapd and dnsmasq packages were left installed.'

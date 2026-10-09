@@ -9,3 +9,4 @@ hostapd.conf
 __pycache__/
 dist/
 country.txt
+sunshine-access.txt

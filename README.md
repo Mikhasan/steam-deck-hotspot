@@ -26,7 +26,14 @@ The installer creates a **Wi-Fi Hotspot** desktop shortcut and installs user fil
 
 Keep Wi-Fi enabled and launch the shortcut, and enter your **Linux user password**, not your Steam password. If you have never set one, run `passwd` in Konsole first. KDE may ask you to trust the desktop shortcut.
 
-The first launch installs `hostapd` and `dnsmasq` from the configured SteamOS repositories if missing. It temporarily disables SteamOS read-only protection and restores its previous state afterward. An internet connection and working package repositories/keyring are required. SteamOS updates may remove these packages; the next launch installs them again. Do not run the installer with sudo.
+The first launch installs `hostapd` and `dnsmasq` from the configured SteamOS repositories if missing. It temporarily disables SteamOS read-only protection and restores its previous state afterward. An internet connection and working package repositories/keyring are required. SteamOS updates may remove these packages and reset pacman's signing keyring.
+On the next launch, the same shortcut initializes the keyring with `pacman-key
+--init`, imports the **installed** `archlinux` and `holo` keyrings, reinstalls missing
+components, restores read-only protection and continues starting the hotspot.
+Existing installations with all required commands available skip package/keyring
+operations. It uses the normal package cache when available; otherwise an internet
+connection is required. Package signature verification stays enabled, and it does
+not run a system upgrade or fetch signing keys from a keyserver. Do not run the installer with sudo.
 
 ## Use
 
@@ -98,20 +105,24 @@ The shortcut uses `pkexec` for privileged operations. No passwordless sudo rule 
 Add the hotspot address in Moonlight (normally `10.42.0.1`; check with
 `ip -4 addr show deckbr0`). Enter the pairing PIN in Sunshine on the Deck.
 
-With firewalld, `nm-shared` normally blocks services on the Deck even when shared
-internet works. To allow Sunshine's default streaming ports for hotspot clients:
+With firewalld, NetworkManager's `nm-shared` zone normally blocks connections to
+host services, even when shared internet works. To opt in to Sunshine access:
 
 ```bash
-for port in 47984/tcp 47989/tcp 48010/tcp 47998-48000/udp; do
-    sudo firewall-cmd --zone=nm-shared --add-port="$port"
-    sudo firewall-cmd --permanent --zone=nm-shared --add-port="$port"
-done
+printf 'enabled\n' > ~/.local/share/steam-deck-hotspot/sunshine-access.txt
 ```
 
-These optional rules persist and apply to interfaces in `nm-shared`. They do not
-open the Sunshine administration page. Adjust the list for custom Sunshine ports.
-The installer does not add them automatically, and uninstall leaves them in place.
-To undo them, repeat the commands with `--remove-port` instead of `--add-port`.
+Restart the hotspot. Each start restores the default Sunshine streaming ports
+(TCP 47984, 47989, 48010; UDP 47998–48000) in the hotspot's `nm-shared` zone.
+The preference lives with your settings and survives SteamOS updates. No rules
+are added unless you opt in. Newly added runtime rules are removed on shutdown;
+preexisting rules are preserved. This does not open the administration page.
+Custom Sunshine ports require separate rules. To disable automatic access, stop
+the hotspot, then write `disabled` to `sunshine-access.txt`.
+
+If you previously added permanent rules manually, those remain independent of
+this preference. For each port above, remove them using `sudo firewall-cmd
+--zone=nm-shared --remove-port=PORT` and the same command with `--permanent`.
 
 ## Troubleshooting
 
@@ -129,7 +140,11 @@ For hostapd messages:
 journalctl -b -u deck-hotspot-ap.service --no-pager
 ```
 
-If clients connect but have no internet, check whether the Deck itself has internet, and check VPN/firewall settings. A repository DNS or package-signature error during first launch is an installation failure; resolve that before retrying. The tool does not disable package signature checks.
+If clients connect but have no internet, check whether the Deck itself has internet, and check VPN/firewall settings. An uninitialized/reset signing keyring is repaired automatically when components
+need restoring. Other repository, DNS or signature errors stop startup and restore
+read-only protection; the full error is saved in `last-run.log`. Resolve the reported
+issue and launch the same shortcut again. The tool does not disable signature checks.
+The success dialog shows the hotspot details; verbose recovery output stays in the log.
 
 ## Uninstall
 
@@ -139,6 +154,10 @@ bash ~/.local/share/steam-deck-hotspot/uninstall.sh
 
 This stops the hotspot, removes its NetworkManager profile, runtime configuration, installed scripts, settings, log, and desktop shortcut. `hostapd` and `dnsmasq` packages remain installed. If you use `XDG_DATA_HOME` or a custom installation path, adjust the command accordingly.
 
+The recovery path was also tested on **SteamOS 3.8.28** after an update removed
+`hostapd`/`dnsmasq` and reset the signing keyring: a single launch restored the
+components and started the hotspot. Shutdown and restart were checked on the Deck.
+
 ## Development and validation
 
 ```bash
@@ -147,7 +166,7 @@ bash -n install.sh
 for script in src/*.sh; do bash -n "$script"; done
 ```
 
-Automated tests exercise installation, updates, password generation, path handling, and uninstallation with privileged actions stubbed out. Channel-selection tests also cover both standalone bands, restricted channels and upstream precedence. They do not validate radio operation; standalone 5 GHz startup and shutdown have also been tested on the LCD with the confirmed RU domain, channel 36; client streaming in that standalone test was not checked. The original hotspot implementation was tested for startup, shutdown, restart, DHCP and client internet access on the LCD configuration above; the packaged installer is checked separately.
+Automated tests exercise installation, updates, password generation, path handling, uninstallation, recovery of missing dependencies and reset signing keys, and restoration of read-only protection on failures, with privileged actions stubbed out. Channel-selection tests also cover both standalone bands, restricted channels and upstream precedence. They do not validate radio operation; standalone 5 GHz startup and shutdown have also been tested on the LCD with the confirmed RU domain, channel 36; client streaming in that standalone test was not checked. The original hotspot implementation was tested for startup, shutdown, restart, DHCP and client internet access on the LCD configuration above; the packaged installer is checked separately.
 
 Contributions and hardware reports are welcome. Include SteamOS version, Deck model, driver, band/channel and a redacted log. Never attach your `settings.txt` or an unredacted hostapd configuration.
 

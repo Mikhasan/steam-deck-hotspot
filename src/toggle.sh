@@ -55,14 +55,16 @@ if pkexec /bin/bash "$DIR/hotspot-helper.sh" toggle "$band" >"$log" 2>&1; then
 else
     result=$?
 fi
-cat "$log"
+if (( terminal )); then cat "$log"; fi
 if (( ! terminal )) && command -v kdialog >/dev/null; then
     if (( result == 0 )); then
-        kdialog --title 'Steam Deck Hotspot' --msgbox "$(cat "$log")" || true
+        message=$(sed -n '/^Hotspot is on\./,$p' "$log")
+        [[ -n $message ]] || message=$(tail -n 5 "$log")
+        kdialog --title 'Steam Deck Hotspot' --msgbox "$message" || true
     else
-        kdialog --title 'Steam Deck Hotspot — error' --error "$(cat "$log")
+        kdialog --title 'Steam Deck Hotspot — error' --error "$(tail -n 25 "$log")
 
-Log saved to: $log" || true
+Full log saved to: $log" || true
     fi
 fi
 exit "$result"

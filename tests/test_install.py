@@ -24,6 +24,10 @@ class InstallTests(unittest.TestCase):
     def test_install_and_update_preserve_settings(self):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
+        for name in ('toggle.sh', 'hotspot-helper.sh', 'dependencies.sh', 'uninstall.sh'):
+            installed = self.app / name
+            self.assertEqual(installed.read_text(), (ROOT / 'src' / name).read_text())
+            self.assertTrue(installed.stat().st_mode & 0o100)
         settings = self.app / 'settings.txt'
         ssid, password = settings.read_text().splitlines()
         self.assertEqual(ssid, 'Deck-Hotspot')
@@ -32,9 +36,11 @@ class InstallTests(unittest.TestCase):
         launcher = (self.desktop / 'Steam-Deck-Hotspot.desktop').read_text()
         self.assertIn(f'Exec=/bin/bash "{self.app}/toggle.sh"', launcher)
         settings.write_text('Custom Name\nMyOwnPassword42\n')
+        (self.app / 'sunshine-access.txt').write_text('enabled\n')
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(settings.read_text(), 'Custom Name\nMyOwnPassword42\n')
+        self.assertEqual((self.app / 'sunshine-access.txt').read_text(), 'enabled\n')
 
     def test_unique_passwords(self):
         self.assertEqual(self.install().returncode, 0)
@@ -58,6 +64,7 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(self.install().returncode, 0)
         sentinel = self.app / 'keep.txt'
         sentinel.write_text('untouched')
+        (self.app / 'sunshine-access.txt').write_text('enabled\n')
         mock = self.base / 'bin'
         mock.mkdir()
         auth = mock / 'pkexec'
@@ -73,6 +80,8 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(sentinel.exists())
         self.assertFalse((self.app / 'settings.txt').exists())
+        self.assertFalse((self.app / 'dependencies.sh').exists())
+        self.assertFalse((self.app / 'sunshine-access.txt').exists())
         self.assertFalse((self.desktop / 'Steam-Deck-Hotspot.desktop').exists())
 
 

@@ -17,7 +17,39 @@ case "$ACTION" in toggle|off|uninstall) ;; *) echo 'Unknown action.'; exit 2 ;; 
 [[ $EUID == 0 ]] || { echo 'Run toggle.sh.'; exit 1; }
 exec 9>/run/lock/deck-hotspot-toggle.lock
 flock -n 9 || { echo 'Another hotspot operation is already running.'; exit 1; }
+# Persist opt-in in the user's installation, not in the replaceable SteamOS image.
+enable_sunshine_access() {
+    [[ -f $DIR/sunshine-access.txt ]] || return 0
+    [[ $(cat "$DIR/sunshine-access.txt") == enabled ]] || return 0
+    command -v firewall-cmd >/dev/null || return 0
+    firewall-cmd --state >/dev/null 2>&1 || return 0
+    local zone port query_status
+    zone=$(firewall-cmd --get-zone-of-interface="$BR") || return
+    [[ $zone == nm-shared ]] || { echo "Cannot configure Sunshine for unexpected firewall zone: $zone" >&2; return 1; }
+    for port in 47984/tcp 47989/tcp 48010/tcp 47998-48000/udp; do
+        if firewall-cmd --zone=nm-shared --query-port="$port" >/dev/null; then
+            continue
+        else
+            query_status=$?
+            (( query_status == 1 )) || return "$query_status"
+        fi
+        firewall-cmd --zone=nm-shared --add-port="$port" >/dev/null || return
+        printf '%s\n' "$port" >>"$STATE/firewall-ports"
+    done
+}
+clear_sunshine_access() {
+    [[ -f $STATE/firewall-ports ]] || return 0
+    local port
+    while read -r port; do
+        case $port in
+            47984/tcp|47989/tcp|48010/tcp|47998-48000/udp)
+                firewall-cmd --zone=nm-shared --remove-port="$port" >/dev/null 2>&1 || true ;;
+        esac
+    done <"$STATE/firewall-ports"
+    rm -f "$STATE/firewall-ports"
+}
 stop_hotspot() {
+    clear_sunshine_access
     systemctl stop "$UNIT.service" 2>/dev/null || true
     nmcli connection down "$PROFILE" >/dev/null 2>&1 || true
     iw dev "$AP" del 2>/dev/null || true
@@ -92,17 +124,17 @@ cleanup() {
         journalctl -u "$UNIT.service" --no-pager -n 25 || true
         stop_hotspot
     fi
-    if (( readonly_changed )); then steamos-readonly enable || true; fi
+    if (( readonly_changed )); then
+        if ! steamos-readonly enable; then
+            echo 'ERROR: Could not restore SteamOS read-only protection. Run sudo steamos-readonly enable.' >&2
+            result=1
+        fi
+    fi
+    return "$result"
 }
 trap cleanup EXIT
-missing=()
-for package in dnsmasq hostapd; do command -v "$package" >/dev/null || missing+=("$package");done
-if (( ${#missing[@]} )); then
-    echo "Installing dependencies: ${missing[*]}"
-    if steamos-readonly status | grep -qi enabled; then steamos-readonly disable; readonly_changed=1; fi
-    pacman -S --needed --noconfirm "${missing[@]}"
-    if (( readonly_changed )); then steamos-readonly enable; readonly_changed=0; fi
-fi
+source "$DIR/dependencies.sh"
+ensure_hotspot_dependencies
 started=1
 install -d -m 700 "$STATE"
 if [[ -z $STA ]]; then
@@ -171,6 +203,7 @@ nmcli -g GENERAL.STATE device show "$BR" | grep -q '^100 ' || { echo 'The shared
 if [[ -n $STA ]]; then
     iw dev "$STA" link | grep -q '^Connected to ' || { echo 'The upstream Wi-Fi connection was lost.'; exit 1; }
 fi
+enable_sunshine_access
 echo "Hotspot is on.
 Network: $SSID
 Password: $PASSWORD

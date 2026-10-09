@@ -24,7 +24,7 @@ if [[ -e $APP_DIR && ! -f $APP_DIR/.steam-deck-hotspot-install ]]; then
 fi
 mkdir -p "$APP_DIR" "$DESKTOP_DIR"
 chmod 700 "$APP_DIR"
-install -m 700 "$SOURCE/src/toggle.sh" "$SOURCE/src/hotspot-helper.sh" "$SOURCE/src/uninstall.sh" "$APP_DIR/"
+install -m 700 "$SOURCE/src/toggle.sh" "$SOURCE/src/hotspot-helper.sh" "$SOURCE/src/dependencies.sh" "$SOURCE/src/uninstall.sh" "$APP_DIR/"
 if [[ ! -e $APP_DIR/settings.txt ]]; then
     password=$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')
     printf 'Deck-Hotspot\n%s\n' "$password" >"$APP_DIR/settings.txt"
